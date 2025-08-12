@@ -1,0 +1,45 @@
+
+```js
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
+app.use(express.static('public'));
+
+let waiting = [];
+
+io.on('connection', socket => {
+  const tryPair = () => {
+    if (waiting.length > 0) {
+      const peer = waiting.shift();
+      const room = peer.id + '#' + socket.id;
+      socket.join(room);
+      peer.join(room);
+      io.to(room).emit('matched', { room });
+    } else {
+      waiting.push(socket);
+    }
+  };
+
+  tryPair();
+
+  socket.on('signal', data => {
+    socket.to(data.room).emit('signal', data);
+  });
+
+  socket.on('next', () => {
+    waiting = waiting.filter(s => s.id !== socket.id);
+    tryPair();
+  });
+
+  socket.on('disconnect', () => {
+    waiting = waiting.filter(s => s.id !== socket.id);
+  });
+});
+
+server.listen(3000, () => {
+  console.log('Servidor http://localhost:3000');
